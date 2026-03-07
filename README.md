@@ -28,6 +28,7 @@
       </div>
     </div>
   </details>
+
 </div>
 
 <p align="center">
@@ -50,7 +51,7 @@
 </p>
 
 &gt; *"Via Score to Performance: Efficient Human-Controllable Long Song Generation with Bar-Level Symbolic Notation"*  
-&gt; ICASSP 2026 Submission – **Pending Review**
+&gt; ICASSP 2026 Submission – **Accepted**
 
 ---
 
