@@ -57,13 +57,13 @@ echo [1/5] Updating pip in the isolated environment...
 if errorlevel 1 goto :setup_failed
 
 echo.
-echo [2/5] Installing BACH Studio Python dependencies...
-"%BACH_PY%" -m pip install -r code\requirements.txt
+echo [2/5] Installing and verifying CUDA-enabled PyTorch...
+"%BACH_PY%" code\setup_cuda.py
 if errorlevel 1 goto :setup_failed
 
 echo.
-echo [3/5] Verifying CUDA-enabled PyTorch...
-"%BACH_PY%" code\setup_cuda.py
+echo [3/5] Installing remaining BACH Studio Python dependencies...
+"%BACH_PY%" -m pip install -r code\requirements.txt
 if errorlevel 1 goto :setup_failed
 
 echo.
