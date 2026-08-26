@@ -40,7 +40,7 @@ if not exist ".venv\Scripts\python.exe" (
     goto :setup_failed
   )
 
-  python -c "import sys; raise SystemExit(0 if (3,10) ^<= sys.version_info[:2] ^<= (3,13) else 1)" >nul 2>nul
+  python -c "import sys; raise SystemExit(0 if sys.version_info[:2] in [(3,10),(3,11),(3,12),(3,13)] else 1)" >nul 2>nul
   if errorlevel 1 (
     echo BACH Studio requires Python 3.10 through 3.13 for the pinned audio stack.
     goto :setup_failed
