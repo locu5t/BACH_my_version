@@ -26,10 +26,43 @@ REQUIRED_XCODEC_PATHS = [
     XCODEC_DIR / "post_process_audio.py",
 ]
 
+MODEL_REQUIREMENTS = {
+    STAGE1_REPO: [
+        "config.json",
+        "model.safetensors.index.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+    ],
+    STAGE2_REPO: [
+        "config.json",
+        "model.safetensors",
+    ],
+}
+
 
 def verify_xcodec() -> tuple[bool, list[Path]]:
     missing = [path for path in REQUIRED_XCODEC_PATHS if not path.exists()]
     return not missing, missing
+
+
+def verify_model(repo_id: str) -> tuple[bool, list[str]]:
+    required = MODEL_REQUIREMENTS[repo_id]
+    try:
+        snapshot = Path(snapshot_download(repo_id=repo_id, local_files_only=True))
+    except Exception:
+        return False, required.copy()
+    missing = [name for name in required if not (snapshot / name).exists()]
+    return not missing, missing
+
+
+def verify_models() -> tuple[bool, dict[str, list[str]]]:
+    failures: dict[str, list[str]] = {}
+    for repo_id in (STAGE1_REPO, STAGE2_REPO):
+        ready, missing = verify_model(repo_id)
+        if not ready:
+            failures[repo_id] = missing
+    return not failures, failures
 
 
 def install_xcodec(force: bool = False) -> None:
@@ -63,21 +96,64 @@ def install_xcodec(force: bool = False) -> None:
 
 def cache_generation_models(force: bool = False) -> None:
     for repo_id in (STAGE1_REPO, STAGE2_REPO):
-        print(f"[BACH Studio] Ensuring model is available: {repo_id}")
+        ready, _ = verify_model(repo_id)
+        if ready and not force:
+            print(f"[BACH Studio] Model already complete: {repo_id}")
+            continue
+        print(f"[BACH Studio] Downloading/repairing model: {repo_id}")
         snapshot_download(repo_id=repo_id, force_download=force)
-    print("[BACH Studio] Stage 1 and Stage 2 models are cached and ready.")
+        ready, missing = verify_model(repo_id)
+        if not ready:
+            raise RuntimeError(
+                f"Model snapshot verification failed for {repo_id}: " + ", ".join(missing)
+            )
+    print("[BACH Studio] Stage 1 and Stage 2 model snapshots are verified.")
 
 
 def setup_runtime(full: bool = True, force: bool = False) -> str:
     install_xcodec(force=force)
     if full:
         cache_generation_models(force=force)
-    ready, missing = verify_xcodec()
-    if not ready:
-        raise RuntimeError("Runtime verification failed: " + ", ".join(map(str, missing)))
+
+    xcodec_ready, xcodec_missing = verify_xcodec()
+    if not xcodec_ready:
+        raise RuntimeError("XCodec verification failed: " + ", ".join(map(str, xcodec_missing)))
+
+    if full:
+        models_ready, model_failures = verify_models()
+        if not models_ready:
+            details = "; ".join(
+                f"{repo}: {', '.join(missing)}" for repo, missing in model_failures.items()
+            )
+            raise RuntimeError("Generation model verification failed: " + details)
+
     return "Runtime setup complete. XCodec is verified" + (
-        " and Stage 1/Stage 2 models are cached." if full else "."
+        " and Stage 1/Stage 2 model snapshots are verified." if full else "."
     )
+
+
+def print_verification(full: bool) -> bool:
+    ready, missing = verify_xcodec()
+    if ready:
+        print("[BACH Studio] XCodec runtime verification passed.")
+    else:
+        print("[BACH Studio] XCodec runtime verification failed.")
+        for path in missing:
+            print(f"  - {path}")
+
+    all_ready = ready
+    if full:
+        models_ready, failures = verify_models()
+        if models_ready:
+            print("[BACH Studio] Stage 1 and Stage 2 model verification passed.")
+        else:
+            print("[BACH Studio] Generation model verification failed.")
+            for repo_id, names in failures.items():
+                print(f"  {repo_id}:")
+                for name in names:
+                    print(f"    - {name}")
+        all_ready = all_ready and models_ready
+    return all_ready
 
 
 def main() -> int:
@@ -85,24 +161,18 @@ def main() -> int:
     parser.add_argument(
         "--xcodec-only",
         action="store_true",
-        help="Only install/repair the XCodec runtime. Stage models will download automatically during generation.",
+        help="Only install/repair XCodec; Stage models can still download automatically during generation.",
     )
     parser.add_argument("--force", action="store_true", help="Force re-download of runtime assets.")
-    parser.add_argument("--verify", action="store_true", help="Verify XCodec files without downloading anything.")
+    parser.add_argument("--verify", action="store_true", help="Verify installed runtime/model files without downloading.")
     args = parser.parse_args()
 
     try:
+        full = not args.xcodec_only
         if args.verify:
-            ready, missing = verify_xcodec()
-            if ready:
-                print("[BACH Studio] XCodec runtime verification passed.")
-                return 0
-            print("[BACH Studio] XCodec runtime verification failed.")
-            for path in missing:
-                print(f"  - {path}")
-            return 2
+            return 0 if print_verification(full=full) else 2
 
-        print(setup_runtime(full=not args.xcodec_only, force=args.force))
+        print(setup_runtime(full=full, force=args.force))
         return 0
     except KeyboardInterrupt:
         print("\n[BACH Studio] Setup cancelled.")
