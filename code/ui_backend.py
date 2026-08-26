@@ -12,7 +12,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-from setup_runtime import install_xcodec, verify_xcodec
+from setup_runtime import (
+    STAGE1_REPO,
+    STAGE2_REPO,
+    setup_runtime,
+    verify_model,
+)
 
 
 CODE_DIR = Path(__file__).resolve().parent
@@ -132,7 +137,7 @@ def system_check() -> dict[str, Any]:
     def add(name: str, ok: bool, detail: str) -> None:
         checks.append({"component": name, "status": "OK" if ok else "MISSING", "detail": detail})
 
-    add("Python", sys.version_info >= (3, 10), sys.version.split()[0])
+    add("Python", (3, 10) <= sys.version_info[:2] <= (3, 13), sys.version.split()[0])
     add("UI inference launcher", INFER_SCRIPT.exists(), str(INFER_SCRIPT))
     add("Upstream inference script", UPSTREAM_INFER_SCRIPT.exists(), str(UPSTREAM_INFER_SCRIPT))
     add("Tag registry", TAGS_PATH.exists(), str(TAGS_PATH))
@@ -159,6 +164,14 @@ def system_check() -> dict[str, Any]:
     for path in REQUIRED_INFERENCE_PATHS:
         add(path.name, path.exists(), str(path.relative_to(REPO_ROOT)))
 
+    for label, repo_id in (
+        ("Stage 1 model", STAGE1_REPO),
+        ("Stage 2 model", STAGE2_REPO),
+    ):
+        ready, missing = verify_model(repo_id)
+        detail = repo_id if ready else f"{repo_id} missing: {', '.join(missing)}"
+        add(label, ready, detail)
+
     missing = [c for c in checks if c["status"] != "OK"]
     return {
         "ready": not missing,
@@ -176,7 +189,7 @@ def system_check_markdown() -> str:
         lines.append(f"| {item['component']} | {icon} {item['status']} | `{detail}` |")
     lines.append("")
     if report["ready"]:
-        lines.append("**Ready to generate.**")
+        lines.append("**Ready to generate. All required runtime/model checks passed.**")
     else:
         lines.append(
             f"**Not ready:** {report['missing_count']} required check(s) are unresolved. "
@@ -345,9 +358,9 @@ def generate_song(
     if not style:
         raise ValueError("Choose at least one style tag or enter Extra style tags.")
 
-    xcodec_ready, _ = verify_xcodec()
-    if not xcodec_ready:
-        install_xcodec(force=False)
+    # Direct `python ui.py` launches are also self-healing: before inference, make
+    # sure the complete official XCodec + Stage 1 + Stage 2 runtime is present.
+    setup_runtime(full=True, force=False)
 
     report = system_check()
     if not report["ready"]:
