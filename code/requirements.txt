@@ -13,3 +13,5 @@ scipy
 accelerate>=0.26.0
 soundfile
 gradio>=5.0
+huggingface_hub>=0.28.0
+hf_xet
