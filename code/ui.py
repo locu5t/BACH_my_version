@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import gradio as gr
 
+from setup_runtime import setup_runtime
 from ui_backend import (
     OUTPUT_ROOT,
     compose_style,
@@ -40,6 +39,14 @@ def run_generation(*args):
 def open_folder(path):
     target = open_output_folder(path)
     return f"Opened: `{target}`"
+
+
+def repair_runtime():
+    try:
+        message = setup_runtime(full=True, force=False)
+        return system_check_markdown(), f"✅ {message}"
+    except Exception as exc:
+        return system_check_markdown(), f"❌ Runtime setup failed: {exc}"
 
 
 CSS = """
@@ -162,11 +169,17 @@ with gr.Blocks(title="BACH Studio", css=CSS) as demo:
 
         with gr.Tab("System"):
             system_report = gr.Markdown(system_check_markdown())
-            refresh_system = gr.Button("Refresh System Check")
+            runtime_status = gr.Markdown(
+                "`run_ui.bat` automatically installs and verifies the full runtime before opening the UI."
+            )
+            with gr.Row():
+                refresh_system = gr.Button("Refresh System Check")
+                repair_system = gr.Button("Download / Repair Complete Runtime", variant="primary")
             refresh_system.click(system_check_markdown, None, system_report)
+            repair_system.click(repair_runtime, None, [system_report, runtime_status])
             gr.Markdown(
-                "The current fork references XCodec/Vocoder files that are not committed in the repository. "
-                "BACH Studio reports these explicitly instead of allowing inference to crash later."
+                "The repair action downloads the official `m-a-p/xcodec_mini_infer` runtime into "
+                "`code/inference/xcodec_mini_infer` and ensures the Stage 1 and Stage 2 generation models are cached."
             )
 
         with gr.Tab("About"):
@@ -177,6 +190,10 @@ with gr.Blocks(title="BACH Studio", css=CSS) as demo:
 BACH Studio exposes the current `code/inference/infer.py` arguments as a browser interface: lyrics, genre/style tags, optional single or dual-track audio references, seed, GPU, segment count, repetition penalty, Stage 2 batch size, model offloading, and rescaling.
 
 The tag pickers are populated directly from `code/top_200_tags.json` and the selected values are converted into the flat genre/style string expected by the inference script.
+
+### Runtime setup
+
+`run_ui.bat` installs the Python requirements and runs `code/setup_runtime.py` before launching the UI. The setup script downloads the official XCodec runtime plus the Stage 1 and Stage 2 model snapshots required by the current inference code. Interrupted Hugging Face downloads can be resumed by running the launcher again.
 
 ### Outputs
 
