@@ -1,6 +1,6 @@
 # BACH Studio
 
-BACH Studio is a local Gradio interface for the repository's current `code/inference/infer.py` pipeline.
+BACH Studio is a local Gradio interface for the repository's current `code/inference/infer.py` music-generation pipeline.
 
 ## Features
 
@@ -11,30 +11,44 @@ BACH Studio is a local Gradio interface for the repository's current `code/infer
 - Advanced controls for seed, GPU index, section count, repetition penalty, max tokens, Stage 2 batch size, model offloading, and output rescaling.
 - Mixed output, vocal stem, and instrumental stem playback when produced by inference.
 - Per-run logs and unique output folders.
-- System/preflight page that detects missing dependencies and checkpoint files before generation.
+- System/preflight page with one-click runtime repair.
+- Automatic installation of the official XCodec runtime and pre-caching of the Stage 1/Stage 2 generation models.
 
 ## Windows launch
 
-1. Activate the Python environment intended for BACH.
-2. Install the repository dependencies:
+Double-click `run_ui.bat` from the repository root.
 
-   `pip install -r code/requirements.txt`
+The launcher performs the complete setup before opening the UI:
 
-3. Double-click `run_ui.bat`.
+1. Installs/updates the Python dependencies from `code/requirements.txt`.
+2. Verifies CUDA-enabled PyTorch. If Windows has an NVIDIA driver but the current PyTorch build cannot use CUDA, it installs a CUDA-enabled `torch`/`torchaudio` build from the official PyTorch wheel index.
+3. Runs `code/setup_runtime.py`, which downloads and verifies the official `m-a-p/xcodec_mini_infer` runtime under `code/inference/xcodec_mini_infer/`.
+4. Pre-caches `m-a-p/YuE-s1-7B-anneal-en-cot` and `m-a-p/YuE-s2-1B-general`, matching the model identifiers used by the checked-in inference script.
+5. Starts BACH Studio and opens it in the default browser.
 
-The launcher starts `code/ui.py` and opens the Gradio UI in the default browser.
+Interrupted Hugging Face downloads are resumable: run `run_ui.bat` again.
 
-## Current repository limitation
+## Runtime assets
 
-The checked-in `code/inference/infer.py` imports and references an `xcodec_mini_infer` runtime tree containing codec configs, codec checkpoints, decoder weights, `models/soundstream_hubert_new.py`, `vocoder.py`, and `post_process_audio.py`. Those files are not currently committed to this fork.
+The XCodec tree and model weights are intentionally not committed to Git because they are multi-gigabyte model/runtime assets. They are no longer a manual prerequisite: BACH Studio provisions them automatically from the authoritative Hugging Face repositories.
 
-BACH Studio therefore performs a preflight check and blocks generation with an explicit missing-component report until those runtime assets are installed under `code/inference/xcodec_mini_infer/`.
+`code/setup_runtime.py` supports:
 
-## Compatibility launcher
+- `python setup_runtime.py` — install/verify XCodec and cache both generation models.
+- `python setup_runtime.py --xcodec-only` — install/repair only XCodec.
+- `python setup_runtime.py --verify` — verify the local XCodec runtime without downloading.
+- `python setup_runtime.py --force` — force a fresh runtime/model download.
 
-The UI runs `code/inference/infer_ui.py`, which keeps the original `infer.py` unchanged while applying two narrow compatibility fixes:
+The **System** tab also provides **Download / Repair Complete Runtime** if an installed asset is removed or damaged later.
 
-- FlashAttention 2 automatically falls back to SDPA/eager attention when FlashAttention is unavailable.
-- The UI compensates for the current segment-slicing boundary so the user's final real lyric section is included in generation.
+## Windows inference compatibility
 
-This wrapper approach makes it easier to sync future upstream changes without maintaining a large forked copy of `infer.py`.
+The UI runs `code/inference/infer_ui.py`, which keeps the original `infer.py` intact on disk and applies narrow runtime compatibility fixes:
+
+- On Windows, the external FlashAttention-2 request is replaced by PyTorch SDPA, avoiding a fragile native `flash-attn` build dependency. Other platforms attempt FlashAttention-2 and fall back to SDPA/eager attention if necessary.
+- `torch.compile` is skipped on Windows for broader native-Windows compatibility.
+- The upstream lyric-section count boundary is corrected at runtime so the final requested lyric section is not silently omitted.
+
+## Outputs
+
+Each run receives a unique folder under `code/output_ui/`. BACH Studio exposes the final mix, vocal stem, instrumental stem, and generation log when produced by inference.
