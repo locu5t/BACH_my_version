@@ -1,5 +1,4 @@
-torch==2.7.1
-torchaudio==2.7.1
+# torch/torchaudio are installed and verified by setup_cuda.py.
 omegaconf
 einops
 numpy<2
