@@ -1,4 +1,6 @@
+.venv/
 code/.ui_inputs/
 code/output_ui/
+code/inference/xcodec_mini_infer/
 __pycache__/
 *.pyc

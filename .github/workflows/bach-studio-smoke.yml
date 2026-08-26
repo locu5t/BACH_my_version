@@ -1,0 +1,43 @@
+name: BACH Studio Smoke
+
+on:
+  push:
+    branches:
+      - feature/bach-studio-ui
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "run_ui.bat"
+      - "BACH_STUDIO.md"
+      - "code/ui.py"
+      - "code/ui_backend.py"
+      - "code/setup_cuda.py"
+      - "code/setup_runtime.py"
+      - "code/smoke_test.py"
+      - "code/inference/infer.py"
+      - "code/inference/infer_ui.py"
+      - "code/requirements.txt"
+      - ".github/workflows/bach-studio-smoke.yml"
+
+jobs:
+  source-integrity:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Run BACH Studio smoke test
+        run: python code/smoke_test.py
+
+      - name: Compile UI Python sources
+        run: python -m compileall -q code/ui.py code/ui_backend.py code/setup_cuda.py code/setup_runtime.py code/smoke_test.py code/inference/infer_ui.py

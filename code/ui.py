@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import gradio as gr
 
+from setup_runtime import setup_runtime
 from ui_backend import (
     OUTPUT_ROOT,
     compose_style,
@@ -40,6 +39,14 @@ def run_generation(*args):
 def open_folder(path):
     target = open_output_folder(path)
     return f"Opened: `{target}`"
+
+
+def repair_runtime():
+    try:
+        message = setup_runtime(full=True, force=False)
+        return system_check_markdown(), f"✅ {message}"
+    except Exception as exc:
+        return system_check_markdown(), f"❌ Runtime setup failed: {exc}"
 
 
 CSS = """
@@ -98,23 +105,37 @@ with gr.Blocks(title="BACH Studio", css=CSS) as demo:
                 prompt_end = gr.Number(label="Reference end (seconds)", value=30.0, minimum=0)
 
             with gr.Accordion("Advanced", open=False):
+                gr.Markdown(
+                    "**RTX 4090 / 24 GB safe defaults:** 2 lyric sections per run, Stage 2 batch size 2, "
+                    "and Stage 1 offloading enabled. Increase these only if VRAM monitoring shows enough headroom."
+                )
                 with gr.Row():
                     seed = gr.Number(label="Seed", value=42, precision=0)
                     cuda_idx = gr.Number(label="GPU index", value=0, precision=0, minimum=0)
                     run_n_segments = gr.Number(
                         label="Sections to generate",
-                        value=99,
+                        value=2,
                         precision=0,
                         minimum=1,
-                        info="Use a large number to process all lyric sections.",
+                        info="24 GB GPUs should normally stay at 1–2 sections per run to reduce OOM risk.",
                     )
                 with gr.Row():
                     repetition_penalty = gr.Slider(1.0, 2.0, value=1.1, step=0.01, label="Repetition penalty")
                     max_new_tokens = gr.Number(label="Max new tokens / section", value=3000, precision=0, minimum=100)
-                    stage2_batch_size = gr.Number(label="Stage 2 batch size", value=4, precision=0, minimum=1)
+                    stage2_batch_size = gr.Number(
+                        label="Stage 2 batch size",
+                        value=2,
+                        precision=0,
+                        minimum=1,
+                        info="2 is conservative for a 24 GB RTX 4090, especially with Windows SDPA.",
+                    )
                 with gr.Row():
                     keep_intermediate = gr.Checkbox(label="Keep intermediate files", value=False)
-                    disable_offload = gr.Checkbox(label="Keep Stage 1 model on GPU", value=False)
+                    disable_offload = gr.Checkbox(
+                        label="Keep Stage 1 model on GPU",
+                        value=False,
+                        info="Leave this OFF on a 24 GB GPU so Stage 1 is offloaded before Stage 2.",
+                    )
                     rescale = gr.Checkbox(label="Rescale output to reduce clipping", value=False)
 
             generate = gr.Button("Generate Song", variant="primary", elem_classes="generate-button")
@@ -162,11 +183,17 @@ with gr.Blocks(title="BACH Studio", css=CSS) as demo:
 
         with gr.Tab("System"):
             system_report = gr.Markdown(system_check_markdown())
-            refresh_system = gr.Button("Refresh System Check")
+            runtime_status = gr.Markdown(
+                "`run_ui.bat` automatically installs and verifies the full runtime before opening the UI."
+            )
+            with gr.Row():
+                refresh_system = gr.Button("Refresh System Check")
+                repair_system = gr.Button("Download / Repair Complete Runtime", variant="primary")
             refresh_system.click(system_check_markdown, None, system_report)
+            repair_system.click(repair_runtime, None, [system_report, runtime_status])
             gr.Markdown(
-                "The current fork references XCodec/Vocoder files that are not committed in the repository. "
-                "BACH Studio reports these explicitly instead of allowing inference to crash later."
+                "The repair action downloads the official `m-a-p/xcodec_mini_infer` runtime into "
+                "`code/inference/xcodec_mini_infer` and ensures the Stage 1 and Stage 2 generation models are cached."
             )
 
         with gr.Tab("About"):
@@ -177,6 +204,14 @@ with gr.Blocks(title="BACH Studio", css=CSS) as demo:
 BACH Studio exposes the current `code/inference/infer.py` arguments as a browser interface: lyrics, genre/style tags, optional single or dual-track audio references, seed, GPU, segment count, repetition penalty, Stage 2 batch size, model offloading, and rescaling.
 
 The tag pickers are populated directly from `code/top_200_tags.json` and the selected values are converted into the flat genre/style string expected by the inference script.
+
+### Runtime setup
+
+`run_ui.bat` installs the Python requirements and runs `code/setup_runtime.py` before launching the UI. The setup script downloads the official XCodec runtime plus the Stage 1 and Stage 2 model snapshots required by the current inference code. Interrupted Hugging Face downloads can be resumed by running the launcher again.
+
+### RTX 4090 guidance
+
+A 24 GB RTX 4090 is supported by the current YuE backend, but long multi-section generation is VRAM intensive. BACH Studio therefore defaults to 2 sections per generation, Stage 2 batch size 2, and Stage 1 GPU offloading enabled. Longer songs can be generated in smaller section groups rather than attempting many sections in a single GPU pass.
 
 ### Outputs
 

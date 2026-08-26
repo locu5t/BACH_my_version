@@ -1,9 +1,8 @@
-torch
+# torch/torchaudio are installed and verified by setup_cuda.py.
 omegaconf
-torchaudio
 einops
-numpy
-transformers
+numpy<2
+transformers>=4.48,<5
 sentencepiece
 tqdm
 tensorboard
@@ -11,5 +10,8 @@ descript-audiotools>=0.7.2
 descript-audio-codec
 scipy
 accelerate>=0.26.0
-soundfile
-gradio>=5.0
+soundfile>=0.12
+gradio>=5.13,<6
+huggingface_hub>=0.28,<1
+hf_xet
+protobuf<4
