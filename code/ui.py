@@ -105,23 +105,37 @@ with gr.Blocks(title="BACH Studio", css=CSS) as demo:
                 prompt_end = gr.Number(label="Reference end (seconds)", value=30.0, minimum=0)
 
             with gr.Accordion("Advanced", open=False):
+                gr.Markdown(
+                    "**RTX 4090 / 24 GB safe defaults:** 2 lyric sections per run, Stage 2 batch size 2, "
+                    "and Stage 1 offloading enabled. Increase these only if VRAM monitoring shows enough headroom."
+                )
                 with gr.Row():
                     seed = gr.Number(label="Seed", value=42, precision=0)
                     cuda_idx = gr.Number(label="GPU index", value=0, precision=0, minimum=0)
                     run_n_segments = gr.Number(
                         label="Sections to generate",
-                        value=99,
+                        value=2,
                         precision=0,
                         minimum=1,
-                        info="Use a large number to process all lyric sections.",
+                        info="24 GB GPUs should normally stay at 1–2 sections per run to reduce OOM risk.",
                     )
                 with gr.Row():
                     repetition_penalty = gr.Slider(1.0, 2.0, value=1.1, step=0.01, label="Repetition penalty")
                     max_new_tokens = gr.Number(label="Max new tokens / section", value=3000, precision=0, minimum=100)
-                    stage2_batch_size = gr.Number(label="Stage 2 batch size", value=4, precision=0, minimum=1)
+                    stage2_batch_size = gr.Number(
+                        label="Stage 2 batch size",
+                        value=2,
+                        precision=0,
+                        minimum=1,
+                        info="2 is conservative for a 24 GB RTX 4090, especially with Windows SDPA.",
+                    )
                 with gr.Row():
                     keep_intermediate = gr.Checkbox(label="Keep intermediate files", value=False)
-                    disable_offload = gr.Checkbox(label="Keep Stage 1 model on GPU", value=False)
+                    disable_offload = gr.Checkbox(
+                        label="Keep Stage 1 model on GPU",
+                        value=False,
+                        info="Leave this OFF on a 24 GB GPU so Stage 1 is offloaded before Stage 2.",
+                    )
                     rescale = gr.Checkbox(label="Rescale output to reduce clipping", value=False)
 
             generate = gr.Button("Generate Song", variant="primary", elem_classes="generate-button")
@@ -194,6 +208,10 @@ The tag pickers are populated directly from `code/top_200_tags.json` and the sel
 ### Runtime setup
 
 `run_ui.bat` installs the Python requirements and runs `code/setup_runtime.py` before launching the UI. The setup script downloads the official XCodec runtime plus the Stage 1 and Stage 2 model snapshots required by the current inference code. Interrupted Hugging Face downloads can be resumed by running the launcher again.
+
+### RTX 4090 guidance
+
+A 24 GB RTX 4090 is supported by the current YuE backend, but long multi-section generation is VRAM intensive. BACH Studio therefore defaults to 2 sections per generation, Stage 2 batch size 2, and Stage 1 GPU offloading enabled. Longer songs can be generated in smaller section groups rather than attempting many sections in a single GPU pass.
 
 ### Outputs
 
