@@ -1,0 +1,4 @@
+code/.ui_inputs/
+code/output_ui/
+__pycache__/
+*.pyc
